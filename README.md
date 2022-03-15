@@ -21,10 +21,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/p6m7g8/gh-parallel)
 [![Mergify](https://img.shields.io/endpoint.svg?url=https://gh.mergify.io/badges/p6m7g8/gh-parallel/&style=flat)](https://mergify.io)
-[![codecov](https://codecov.io/gh/p6m7g8/gh-parallel/branch/master/graph/badge.svg?token=14Yj1fZbew)](https://codecov.io/gh/p6m7g8/gh-parallel)
-[![Known Vulnerabilities](https://snyk.io/test/github/p6m7g8/gh-parallel/badge.svg?targetFile=package.json)](https://snyk.io/test/github/p6m7g8/gh-parallel?targetFile=package.json)
-[![Gihub repo dependents](https://badgen.net/github/dependents-repo/p6m7g8/gh-parallel)](https://github.com/p6m7g8/gh-parallel/network/dependents?dependent_type=REPOSITORY)
-[![Gihub package dependents](https://badgen.net/github/dependents-pkg/p6m7g8/gh-parallel)](https://github.com/p6m7g8/gh-parallel/network/dependents?dependent_type=PACKAGE)
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
 [![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
