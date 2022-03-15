@@ -9,10 +9,10 @@
     - [gh-parallel](#gh-parallel-1)
     - [Badges](#badges)
   - [Summary](#summary)
+  - [Usage](#usage)
   - [Contributing](#contributing)
   - [Code of Conduct](#code-of-conduct)
   - [Changes](#changes)
-  - [Usage](#usage)
   - [Author](#author)
 
 ### Badges
@@ -27,6 +27,25 @@
 
 ## Summary
 
+After:
+![after](assets/after.jpg)
+
+Before:
+![before](assets/before.jpg)
+
+This requires `gnu parallel` to be installed. Which it will then make use of to parallelize clone and sync requests.
+
+This is quite useful to clone organizations faster and or a list of disparate repositories.
+
+## Usage
+
+```shell
+Usage:
+  gh parallel -h
+  gh parallel list [<login> [-- <list options>] | -h]
+  gh parallel clone [<login> <dest_dir> [-- <clone options] | -h]
+```
+
 ## Contributing
 
 - [How to Contribute](CONTRIBUTING.md)
@@ -38,15 +57,6 @@
 ## Changes
 
 - [Change Log](CHANGELOG.md)
-
-## Usage
-
-```shell
-Usage:
-  gh parallel -h
-  gh parallel list [<login> [-- <list options>] | -h]
-  gh parallel clone [<login> <dest_dir> [-- <clone options] | -h]
-```
 
 ## Author
 
