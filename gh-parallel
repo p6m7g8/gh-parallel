@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+
+# shellcheck shell=bash
+
+################################################################################
+#
+# Uses GNU parallel to parallelize many github operations.
+# Useful for collections of repositories or org wide things.
+#
+# http://www.gnu.org/savannah-checkouts/gnu/bash/manual/bash.html#Shell-Functions
+# man parallel_tutorial
+# The command can be a script, a binary or
+# ---> a Bash function if the function is exported using export -f
+#################################################################################
+
+######################################################################
+#<
+#
+# Function: p6_usage(rc=0, msg=)
+#
+#  Args:
+#   rc -
+#   msg -
+#
+#>
+######################################################################
+p6_usage() {
+  local rc="${1:-0}"
+  local msg="${2:-}"
+
+  if [ -n "$msg" ]; then
+    echo >&2 "$msg"
+  fi
+  cat <<EOF
+Usage:
+  gh parallel -h
+  gh parallel list [<login> [-- <list options>] | -h]
+  gh parallel clone [<login> <dest_dir> [-- <clone options] | -h]
+  FUTURE commands
+
+Options:
+EOF
+  exit "$rc"
+}
+
+######################################################################
+#<
+#
+# Function: p6main(...)
+#
+#  Args:
+#  ... -
+#
+#>
+######################################################################
+p6main() {
+  shift 0
+
+  # sanitize env
+  LC_ALL=C
+
+  # parse options
+  local flag
+  while getopts "h" flag; do
+    case $flag in
+    h) p6_usage 0 "help" ;;
+    *) p6_usage 1 "invalid flag" ;;
+    esac
+  done
+  shift $((OPTIND - 1))
+
+  # grab command
+  local cmd="$1"
+  shift 1
+
+  # security 101: only allow valid comamnds
+  case $cmd in
+  help) p6_usage ;;
+  list) ;;
+  clone) ;;
+  *) p6_usage 1 "invalid cmd" ;;
+  esac
+
+  # exit if any cli errors w/ >0 return code
+  # the commands can still disable locally if needed
+  set -e
+  p6_cmd_"${cmd}" "$@"
+  set +e
+
+  return 0
+}
+
+######################################################################
+#<
+#
+# Function: p6_cmd_list(login)
+#
+#  Args:
+#	  login -
+#
+#>
+######################################################################
+p6_cmd_list() {
+  local login="$1"
+
+  gh repo list "$login" -L 5000 | awk '{print $1}' | sort
+}
+
+######################################################################
+#<
+#
+# Function: p6_cmd_clone(login, dir)
+#
+#  Args:
+#	  login -
+#	  dir -
+#
+#>
+######################################################################
+p6_cmd_clone() {
+  local login="$1"
+  local dir="$2"
+
+  if [ $# -ne 2 ]; then
+    p6_usage 1 "invalid arguments"
+  fi
+
+  local combos
+  combos=$(p6_cmd_list "$login")
+
+  if [ ! -d "$dir" ]; then
+    echo "mkdir -p $dir"
+    mkdir -p "$dir"
+  fi
+
+  local login_dir
+  login_dir="$dir/$login"
+
+  # shellcheck disable=SC2086
+  parallel --bar --jobs 3 -m p6_github_clone_parallel "$login_dir" ::: $combos
+}
+
+######################################################################
+#<
+#
+# Function: p6_github_clone_parallel(login_dir, ...)
+#
+#  Args:
+#	  login_dir -
+#	  ... -
+#
+#>
+######################################################################
+p6_github_clone_parallel() {
+  local login_dir="$1"
+  shift 1
+
+  local combo
+  for combo in echo "$@"; do
+    local repo
+    repo=$(echo "$combo" | cut -d / -f 2)
+    local dest_dir="$login_dir/$repo"
+
+    if [ -d "$dest_dir" ]; then
+      local cmd
+      cmd="(cd \"$dest_dir\" && gh repo sync >/dev/null 2>&1)"
+      eval "$cmd"
+    else
+      mkdir -p "$dest_dir"
+      local cmd
+      cmd="(cd \"$login_dir\" && gh repo clone \"$combo\" >/dev/null 2>&1)"
+      eval "$cmd"
+    fi
+  done
+}
+export -f p6_github_clone_parallel
+
+######################################################################
+#<
+#
+# Function: p6main(...)
+#
+#  Args:
+#	  ... -
+#
+#>
+######################################################################
+p6main "$@"
