@@ -14,6 +14,7 @@
   - [Code of Conduct](#code-of-conduct)
   - [Changes](#changes)
   - [Author](#author)
+  - [Contributors ✨](#contributors-)
 
 ### Badges
 
@@ -24,6 +25,9 @@
 [![Known Vulnerabilities](https://snyk.io/test/github/p6m7g8/gh-parallel/badge.svg?targetFile=package.json)](https://snyk.io/test/github/p6m7g8/gh-parallel?targetFile=package.json)
 [![Gihub repo dependents](https://badgen.net/github/dependents-repo/p6m7g8/gh-parallel)](https://github.com/p6m7g8/gh-parallel/network/dependents?dependent_type=REPOSITORY)
 [![Gihub package dependents](https://badgen.net/github/dependents-pkg/p6m7g8/gh-parallel)](https://github.com/p6m7g8/gh-parallel/network/dependents?dependent_type=PACKAGE)
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 ## Summary
 
@@ -61,3 +65,23 @@ Usage:
 ## Author
 
 Philip M . Gollucci <pgollucci@p6m7g8.com>
+
+## Contributors ✨
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tr>
+    <td align="center"><a href="http://pgollucci.github.io/"><img src="https://avatars.githubusercontent.com/u/34295?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Philip M. Gollucci</b></sub></a><br /><a href="https://github.com/p6m7g8/gh-parallel/commits?author=pgollucci" title="Code">💻</a></td>
+  </tr>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
