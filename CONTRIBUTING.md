@@ -13,10 +13,7 @@ let us know if it's not up-to-date (even better, submit a PR with your  correcti
 
 ## Getting Started
 
-The following steps describe how to set up the AWS CDK repository on your local machine.
 The alternative is to use [Gitpod](https://www.gitpod.io/), a Cloud IDE for your development.
-See [Gitpod section](#gitpod-alternative) on how to set up the CDK repo on Gitpod.
-
 ### Setup
 
 ```console
@@ -26,10 +23,7 @@ gh extensions install .
 gh parallel -h
 ```
 
-We recommend that you use [Visual Studio Code](https://code.visualstudio.com/) to work on the CDK.
-We use `eslint` to keep our code consistent in terms of style and reducing defects. We recommend installing
-the [eslint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) as well.
-
+We recommend that you use [Visual Studio Code](https://code.visualstudio.com/).
 ## Pull Requests
 
 * Create a commit with your changes and push them to a [fork](https://docs.github.com/en/get-started/quickstart/fork-a-repo).
