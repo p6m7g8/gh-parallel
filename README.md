@@ -2,11 +2,8 @@
 
 ## Table of Contents
 
-
-### gh-parallel
 - [gh-parallel](#gh-parallel)
   - [Table of Contents](#table-of-contents)
-    - [gh-parallel](#gh-parallel-1)
     - [Badges](#badges)
   - [Summary](#summary)
   - [Usage](#usage)

@@ -5,12 +5,12 @@ on:
     branches:
       - main
     paths:
-      - "**.md"
+      - "*.md"
   pull_request:
     branches:
       - main
     paths:
-      - "**.md"
+      - "*.md"
 
 jobs:
   javascript:
@@ -22,4 +22,4 @@ jobs:
         with:
           node-version: "14"
       - run: npm install -g markdownlint-cli
-      - run: markdownlint docs/
+      - run: markdownlint *.md
