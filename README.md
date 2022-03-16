@@ -17,6 +17,9 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/p6m7g8/gh-parallel)
 [![Mergify](https://img.shields.io/endpoint.svg?url=https://gh.mergify.io/badges/p6m7g8/gh-parallel/&style=flat)](https://mergify.io)
+[![Release](https://github.com/p6m7g8/gh-parallel/actions/workflows/release.yml/badge.svg)](https://github.com/p6m7g8/gh-parallel/actions/workflows/release.yml)
+[![Shellcheck](https://github.com/p6m7g8/gh-parallel/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/p6m7g8/gh-parallel/actions/workflows/shellcheck.yml)
+[![Markdown](https://github.com/p6m7g8/gh-parallel/actions/workflows/markdown.yaml/badge.svg)](https://github.com/p6m7g8/gh-parallel/actions/workflows/markdown.yaml)
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
 [![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
