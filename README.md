@@ -9,7 +9,6 @@
   - [Usage](#usage)
   - [Contributing](#contributing)
   - [Code of Conduct](#code-of-conduct)
-  - [Changes](#changes)
   - [Author](#author)
   - [Contributors ✨](#contributors-)
 
@@ -50,10 +49,6 @@ Usage:
 ## Code of Conduct
 
 - [Code of Conduct](https://github.com/p6m7g8/.github/blob/master/CODE_OF_CONDUCT.md)
-
-## Changes
-
-- [Change Log](CHANGELOG.md)
 
 ## Author
 
