@@ -34,9 +34,7 @@ p6_usage() {
   cat <<EOF
 Usage:
   gh parallel -h
-  gh parallel list [<login> [-- <list options>] | -h]
-  gh parallel clone [<login> <dest_dir> [-- <clone options] | -h]
-  FUTURE commands
+  gh parallel clone <login> <dest_dir> [-- <clone-options>]
 
 Options:
 EOF
@@ -76,7 +74,6 @@ p6main() {
   # security 101: only allow valid comamnds
   case $cmd in
   help) p6_usage ;;
-  list) ;;
   clone) ;;
   *) p6_usage 1 "invalid cmd" ;;
   esac
