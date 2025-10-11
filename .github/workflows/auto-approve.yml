@@ -17,6 +17,6 @@ jobs:
       !contains(github.event.pull_request.labels.*.name, 'do-not-merge') &&
       (contains(github.event.pull_request.labels.*.name, 'auto-approve') || github.event.pull_request.user.login == 'pgollucci' || github.event.pull_request.user.login == 'p6m7g8-automation')
     steps:
-      - uses: hmarr/auto-approve-action@v4.0.0
+      - uses: hmarr/auto-approve-action@v4.1.0
         with:
           github-token: ${{ secrets.P6_A_GH_TOKEN }}
