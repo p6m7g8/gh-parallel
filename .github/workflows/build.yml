@@ -1,0 +1,12 @@
+name: Build
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op
+        run: echo "This workflow intentionally does nothing and always passes."
