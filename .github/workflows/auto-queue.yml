@@ -1,0 +1,35 @@
+name: Enqueue PR to Merge Queue (after CI)
+
+on:
+  workflow_run:
+    workflows: ["Build"] # must match the top-level 'name:' in your CI workflow
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enqueue_one_pr:
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get triggering PR number (single)
+        id: pr
+        run: |
+          PR=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
+      - name: Enqueue the single PR into default Merge Queue
+        if: steps.pr.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.pr.outputs.pr }}
+        run: |
+          echo "Queueing PR #$PR in $REPO"
+          # No strategy flag: for branches with Merge Queue enabled,
+          # this adds the PR to the queue (or enables auto-merge if checks still pending).
+          gh pr merge -R "$REPO" "$PR"

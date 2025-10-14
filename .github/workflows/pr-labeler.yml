@@ -1,0 +1,31 @@
+name: PR Labeler
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label-core:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label core contributions
+        if: github.event.pull_request.user.login == 'pgollucci' && !contains(join(github.event.pull_request.labels.*.name, ','), 'contribution/core')
+        uses: actions-ecosystem/action-add-labels@v1.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          labels: contribution/core
+
+  label-auto-merge:
+    runs-on: ubuntu-latest
+    needs: label-core
+    steps:
+      - name: Label auto-merge for core
+        if: contains(join(github.event.pull_request.labels.*.name, ','), 'contribution/core') && !contains(join(github.event.pull_request.labels.*.name, ','), 'auto-merge')
+        uses: actions-ecosystem/action-add-labels@v1.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          labels: auto-merge
