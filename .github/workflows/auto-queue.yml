@@ -1,0 +1,19 @@
+name: Enqueue PR to Merge Queue (after CI)
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+
+jobs:
+  enqueue:
+    runs-on: ubuntu-latest
+    name: Enqueue PR to Merge Queue (after CI)
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enqueue PR
+        uses: p6m7g8-actions/p6-gh-pr-auto-enqueue@main
+        with:
+          gh_token: ${{ secrets.GITHUB_TOKEN }}

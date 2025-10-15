@@ -2,22 +2,17 @@ name: Release
 
 on:
   push:
-    branches: [main]
-    paths:
-      - gh-parallel
+    branches:
+      - main
+  workflow_dispatch: {}
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v2
-      - name: Set git identity
-        run: |-
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-      - name: Create Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REF: ${{ github.ref }}
-        run: v=$(gh release list |awk '{print $1}' |awk -F\. '{print $2}' |head -1); v=$(($v+1)); gh release create --draft --generate-notes v0.$v.0 gh-parallel
+      - name: Release
+        uses: p6m7g8-actions/p6-gh-release@main
+        with:
+          gh_token: ${{ secrets.P6_A_GH_TOKEN }}
