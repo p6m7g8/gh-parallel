@@ -1,4 +1,5 @@
 name: auto-approve
+
 on:
   pull_request_target:
     types:
@@ -7,16 +8,15 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+
 jobs:
   approve:
     runs-on: ubuntu-latest
+    name: Auto-Approve PR
     permissions:
       pull-requests: write
-    if: |
-      !github.event.pull_request.draft &&
-      !contains(github.event.pull_request.labels.*.name, 'do-not-merge') &&
-      (contains(github.event.pull_request.labels.*.name, 'auto-approve') || github.event.pull_request.user.login == 'pgollucci' || github.event.pull_request.user.login == 'p6m7g8-automation')
     steps:
-      - uses: hmarr/auto-approve-action@v4.0.0
+      - name: Auto-Approve PR
+        uses: p6m7g8-actions/p6-gh-pr-auto-approve@main
         with:
-          github-token: ${{ secrets.P6_A_GH_TOKEN }}
+          bot_token: ${{ secrets.P6_A_GH_TOKEN }}
