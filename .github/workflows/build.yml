@@ -8,5 +8,5 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: No-op
-        run: echo "This workflow intentionally does nothing and always passes."
+      - name: Build
+        uses: p6m7g8-actions/p6-build@main
