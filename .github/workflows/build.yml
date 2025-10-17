@@ -1,0 +1,14 @@
+name: Build
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build
+        uses: p6m7g8-actions/p6-build@main
+        with:
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
