@@ -22,4 +22,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF: ${{ github.ref }}
         shell: bash
-        run: v=$(gh release list |awk '{print $1}' |awk -F\. '{print $2}' |head -1); v=$(($v+1)); gh release create --draft --generate-notes v0.$v.0 gh-parallel
+        run: v=$(gh release list |awk '{print $1}' |awk -F\. '{print $2}' |head -1); v=$((v+1)); gh release create --draft --generate-notes v0.$v.0 gh-parallel
