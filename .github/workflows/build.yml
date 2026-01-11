@@ -10,3 +10,5 @@ jobs:
     steps:
       - name: Build
         uses: p6m7g8-actions/p6-build@main
+        with:
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
