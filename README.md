@@ -15,8 +15,6 @@
 ### Badges
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/p6m7g8/gh-parallel)
-[![Mergify](https://img.shields.io/endpoint.svg?url=https://gh.mergify.io/badges/p6m7g8/gh-parallel/&style=flat)](https://mergify.io)
 [![Release](https://github.com/p6m7g8/gh-parallel/actions/workflows/release.yml/badge.svg)](https://github.com/p6m7g8/gh-parallel/actions/workflows/release.yml)
 [![Shellcheck](https://github.com/p6m7g8/gh-parallel/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/p6m7g8/gh-parallel/actions/workflows/shellcheck.yml)
 [![Markdown](https://github.com/p6m7g8/gh-parallel/actions/workflows/markdown.yaml/badge.svg)](https://github.com/p6m7g8/gh-parallel/actions/workflows/markdown.yaml)
@@ -66,7 +64,8 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 <!-- markdownlint-disable -->
 <table>
   <tr>
-    <td align="center"><a href="http://pgollucci.github.io/"><img src="https://avatars.githubusercontent.com/u/34295?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Philip M. Gollucci</b></sub></a><br /><a href="https://github.com/p6m7g8/gh-parallel/commits?author=pgollucci" title="Code">💻</a></td>
+    <td align="center"><a href="http://pgollucci.github.io/"><img src="https://avatars.githubusercontent.com/u/34295?v=4?s=100" width="100px;" alt=""/><br />
+    <sub><b>Philip M. Gollucci</b></sub></a><br /><a href="https://github.com/p6m7g8/gh-parallel/commits?author=pgollucci" title="Code">💻</a></td>
   </tr>
 </table>
 
