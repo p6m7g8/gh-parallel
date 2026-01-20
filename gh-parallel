@@ -157,7 +157,7 @@ p6_github_clone_parallel() {
   shift 1
 
   local combo
-  for combo in echo "$@"; do
+  for combo in "$@"; do
     local repo
     repo=$(echo "$combo" | cut -d / -f 2)
     local dest_dir="$login_dir/$repo"
