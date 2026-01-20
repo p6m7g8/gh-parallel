@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # shellcheck shell=bash
+set -o pipefail
 
 ################################################################################
 #
@@ -34,6 +35,7 @@ p6_usage() {
   cat <<EOF
 Usage:
   gh parallel -h
+  gh parallel list <login> [--archived | --source | --fork]
   gh parallel clone <login> <dest_dir> [-- <clone-options>]
   gh parallel status <dest_dir>
 
@@ -41,9 +43,14 @@ Commands:
   clone   Clone all repositories for a user or organization
   status  Show status of all repositories in a directory
 
+Commands:
+  list    List all repositories for a user or organization
+  clone   Clone all repositories for a user or organization
+
 Options:
   -h      Show this help message
 EOF
+
   exit "$rc"
 }
 
@@ -57,11 +64,32 @@ EOF
 #
 #>
 ######################################################################
-p6main() {
-  shift 0
+p6_check_dependencies() {
+  if ! command -v parallel >/dev/null 2>&1; then
+    echo >&2 "error: GNU parallel is required but not installed"
+    echo >&2 "Install with: brew install parallel (macOS) or apt install parallel (Linux)"
+    exit 1
+  fi
 
+  if ! command -v gh >/dev/null 2>&1; then
+    echo >&2 "error: GitHub CLI (gh) is required but not installed"
+    echo >&2 "Install from: https://cli.github.com/"
+    exit 1
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    echo >&2 "error: GitHub CLI is not authenticated"
+    echo >&2 "Run: gh auth login"
+    exit 1
+  fi
+}
+
+p6main() {
   # sanitize env
   LC_ALL=C
+
+  # check required dependencies
+  p6_check_dependencies
 
   # parse options
   local flag
@@ -80,8 +108,10 @@ p6main() {
   # security 101: only allow valid commands
   case $cmd in
   help) p6_usage ;;
+  list) ;;
   clone) ;;
   status) ;;
+  sync) ;;
   *) p6_usage 1 "invalid cmd" ;;
   esac
 
@@ -106,8 +136,42 @@ p6main() {
 ######################################################################
 p6_cmd_list() {
   local login="$1"
+  shift 1
 
-  gh repo list "$login" -L 5000 | awk '{print $1}' | sort
+  local gh_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --language)
+      gh_args+=("--language" "$2")
+      shift 2
+      ;;
+    --topic)
+      gh_args+=("--topic" "$2")
+      shift 2
+      ;;
+    --visibility)
+      gh_args+=("--visibility" "$2")
+      shift 2
+      ;;
+    --archived)
+      gh_args+=("--archived")
+      shift
+      ;;
+    --source)
+      gh_args+=("--source")
+      shift
+      ;;
+    --fork)
+      gh_args+=("--fork")
+      shift
+      ;;
+    *)
+      break
+      ;;
+    esac
+  done
+
+  gh repo list "$login" -L 5000 "${gh_args[@]}" | awk '{print $1}' | sort
 }
 
 ######################################################################
@@ -124,16 +188,18 @@ p6_cmd_list() {
 p6_cmd_clone() {
   local login="$1"
   local dir="$2"
+  shift 2
 
-  if [ $# -ne 2 ]; then
-    p6_usage 1 "invalid arguments"
+  if [ -z "$login" ] || [ -z "$dir" ]; then
+    p6_usage 1 "clone requires <login> and <dest_dir>"
   fi
 
+  # Pass remaining args (filters) to list
   local combos
-  combos=$(p6_cmd_list "$login")
+  combos=$(p6_cmd_list "$login" "$@")
 
   if [ -z "$combos" ]; then
-    p6_usage 1 "invalid organization/user"
+    p6_usage 1 "no repositories found (check login or filters)"
   fi
 
   if [ ! -d "$dir" ]; then
@@ -259,18 +325,14 @@ p6_github_clone_parallel() {
   local combo
   for combo in "$@"; do
     local repo
-    repo=$(echo "$combo" | cut -d / -f 2)
+    repo="${combo##*/}"
     local dest_dir="$login_dir/$repo"
 
     if [ -d "$dest_dir" ]; then
-      local cmd
-      cmd="(cd \"$dest_dir\" && gh repo sync >/dev/null 2>&1)"
-      eval "$cmd"
+      (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
     else
       mkdir -p "$dest_dir"
-      local cmd
-      cmd="(cd \"$login_dir\" && gh repo clone \"$combo\" >/dev/null 2>&1)"
-      eval "$cmd"
+      (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1)
     fi
   done
 }
