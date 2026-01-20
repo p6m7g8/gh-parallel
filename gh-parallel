@@ -37,6 +37,11 @@ Usage:
   gh parallel -h
   gh parallel list <login> [--archived | --source | --fork]
   gh parallel clone <login> <dest_dir> [-- <clone-options>]
+  gh parallel status <dest_dir>
+
+Commands:
+  clone   Clone all repositories for a user or organization
+  status  Show status of all repositories in a directory
 
 Commands:
   list    List all repositories for a user or organization
@@ -44,19 +49,6 @@ Commands:
 
 Options:
   -h      Show this help message
-
-List Options:
-  --archived   Only list archived repositories
-  --source     Only list non-fork repositories
-  --fork       Only list forked repositories
-
-Clone Options:
-  --language <lang>   Only clone repos with the specified language
-  --topic <topic>     Only clone repos with the specified topic
-  --visibility <vis>  Only clone repos with visibility (public|private)
-  --archived          Only clone archived repositories
-  --source            Only clone non-fork repositories
-  --fork              Only clone forked repositories
 EOF
 
   exit "$rc"
@@ -118,6 +110,7 @@ p6main() {
   help) p6_usage ;;
   list) ;;
   clone) ;;
+  status) ;;
   sync) ;;
   *) p6_usage 1 "invalid cmd" ;;
   esac
@@ -224,18 +217,18 @@ p6_cmd_clone() {
 ######################################################################
 #<
 #
-# Function: p6_cmd_sync(dir)
+# Function: p6_cmd_status(dir)
 #
 #  Args:
 #	  dir -
 #
 #>
 ######################################################################
-p6_cmd_sync() {
+p6_cmd_status() {
   local dir="$1"
 
   if [ $# -ne 1 ]; then
-    p6_usage 1 "sync requires exactly one argument: <dest_dir>"
+    p6_usage 1 "status requires exactly one argument: <dest_dir>"
   fi
 
   if [ ! -d "$dir" ]; then
@@ -251,30 +244,68 @@ p6_cmd_sync() {
     exit 1
   fi
 
-  echo "Syncing repositories in $dir..."
-  # shellcheck disable=SC2086
-  parallel --bar --jobs 3 -m p6_github_sync_parallel ::: $repos
-}
+  local clean=0
+  local dirty=0
+  local behind=0
+  local ahead=0
+  local total=0
 
-######################################################################
-#<
-#
-# Function: p6_github_sync_parallel(...)
-#
-#  Args:
-#	  ... -
-#
-#>
-######################################################################
-p6_github_sync_parallel() {
+  echo "Checking repository status..."
+  echo ""
+
   local repo_dir
-  for repo_dir in "$@"; do
-    if [ -d "$repo_dir/.git" ]; then
-      (cd "$repo_dir" && gh repo sync >/dev/null 2>&1) || true
+  for repo_dir in $repos; do
+    total=$((total + 1))
+    local repo_name
+    repo_name=$(basename "$repo_dir")
+    local status_line=""
+
+    # Check for uncommitted changes
+    if ! (cd "$repo_dir" && git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null); then
+      dirty=$((dirty + 1))
+      status_line="[dirty]  $repo_name"
+    else
+      # Check if behind/ahead of remote
+      local upstream
+      upstream=$(cd "$repo_dir" && git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null) || true
+      if [ -n "$upstream" ]; then
+        local counts
+        counts=$(cd "$repo_dir" && git rev-list --left-right --count HEAD..."$upstream" 2>/dev/null) || true
+        if [ -n "$counts" ]; then
+          local ahead_count behind_count
+          ahead_count=$(echo "$counts" | awk '{print $1}')
+          behind_count=$(echo "$counts" | awk '{print $2}')
+          if [ "$behind_count" -gt 0 ]; then
+            behind=$((behind + 1))
+            status_line="[behind] $repo_name ($behind_count commits)"
+          elif [ "$ahead_count" -gt 0 ]; then
+            ahead=$((ahead + 1))
+            status_line="[ahead]  $repo_name ($ahead_count commits)"
+          else
+            clean=$((clean + 1))
+            status_line="[clean]  $repo_name"
+          fi
+        else
+          clean=$((clean + 1))
+          status_line="[clean]  $repo_name"
+        fi
+      else
+        clean=$((clean + 1))
+        status_line="[clean]  $repo_name (no upstream)"
+      fi
     fi
+
+    echo "$status_line"
   done
+
+  echo ""
+  echo "Summary:"
+  echo "  Total:  $total"
+  echo "  Clean:  $clean"
+  echo "  Dirty:  $dirty"
+  echo "  Behind: $behind"
+  echo "  Ahead:  $ahead"
 }
-export -f p6_github_sync_parallel
 
 ######################################################################
 #<
