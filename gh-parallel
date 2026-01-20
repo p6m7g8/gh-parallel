@@ -6,6 +6,18 @@ set -o pipefail
 # Temp file for tracking results across parallel processes
 P6_RESULTS_FILE=""
 
+# Configuration
+P6_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gh-parallel"
+P6_CONFIG_FILE="$P6_CONFIG_DIR/config"
+
+# Default values (loaded from config, used by clone command)
+# shellcheck disable=SC2034
+P6_DEFAULT_JOBS=3
+# shellcheck disable=SC2034
+P6_DEFAULT_VISIBILITY=""
+# shellcheck disable=SC2034
+P6_DEFAULT_SOURCE=""
+
 ################################################################################
 #
 # Uses GNU parallel to parallelize many github operations.
@@ -38,6 +50,26 @@ p6_usage() {
   cat <<EOF
 Usage:
   gh parallel -h
+  gh parallel clone <login> <dest_dir> [-- <clone-options>]
+  gh parallel config [<key> [<value>]]
+
+Commands:
+  clone   Clone all repositories for a user or organization
+  config  Get or set configuration options
+
+Options:
+  -h      Show this help message
+
+Config Keys:
+  jobs        Number of parallel jobs (default: 3)
+  visibility  Default visibility filter (public|private)
+  source      Default to source repos only (true|false)
+
+Examples:
+  gh parallel config                    # Show all settings
+  gh parallel config jobs               # Show jobs setting
+  gh parallel config jobs 8             # Set jobs to 8
+  gh parallel config visibility public  # Only clone public repos by default
   gh parallel [-j <jobs>] [--dry-run] clone <login> <dest_dir>
 
 Commands:
@@ -107,6 +139,7 @@ p6main() {
   help) p6_usage ;;
   list) ;;
   clone) ;;
+  config) ;;
   status) ;;
   sync) ;;
   *) p6_usage 1 "invalid cmd" ;;
@@ -131,6 +164,117 @@ p6main() {
 #
 #>
 ######################################################################
+######################################################################
+#<
+#
+# Function: p6_load_config()
+#
+#>
+######################################################################
+p6_load_config() {
+  if [ -f "$P6_CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$P6_CONFIG_FILE"
+  fi
+}
+
+######################################################################
+#<
+#
+# Function: p6_cmd_config(key, value)
+#
+#  Args:
+#	  key -
+#	  value -
+#
+#>
+######################################################################
+p6_cmd_config() {
+  local key="${1:-}"
+  local value="${2:-}"
+
+  # Ensure config directory exists
+  mkdir -p "$P6_CONFIG_DIR"
+
+  # No args: show all config
+  if [ -z "$key" ]; then
+    echo "Configuration ($P6_CONFIG_FILE):"
+    echo ""
+    if [ -f "$P6_CONFIG_FILE" ]; then
+      cat "$P6_CONFIG_FILE"
+    else
+      echo "  (no configuration set, using defaults)"
+    fi
+    echo ""
+    echo "Defaults:"
+    echo "  P6_DEFAULT_JOBS=3"
+    echo "  P6_DEFAULT_VISIBILITY=\"\""
+    echo "  P6_DEFAULT_SOURCE=\"\""
+    return 0
+  fi
+
+  # Validate key
+  case "$key" in
+  jobs | visibility | source) ;;
+  *)
+    echo >&2 "error: unknown config key: $key"
+    echo >&2 "Valid keys: jobs, visibility, source"
+    exit 1
+    ;;
+  esac
+
+  local var_name="P6_DEFAULT_${key^^}"
+
+  # One arg: show specific config
+  if [ -z "$value" ]; then
+    p6_load_config
+    eval "echo \"\${$var_name:-}\""
+    return 0
+  fi
+
+  # Validate value
+  case "$key" in
+  jobs)
+    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+      echo >&2 "error: jobs must be a positive integer"
+      exit 1
+    fi
+    ;;
+  visibility)
+    case "$value" in
+    public | private | "") ;;
+    *)
+      echo >&2 "error: visibility must be 'public' or 'private'"
+      exit 1
+      ;;
+    esac
+    ;;
+  source)
+    case "$value" in
+    true | false | "") ;;
+    *)
+      echo >&2 "error: source must be 'true' or 'false'"
+      exit 1
+      ;;
+    esac
+    ;;
+  esac
+
+  # Two args: set config
+  # Read existing config, update the key, write back
+  local temp_file
+  temp_file=$(mktemp)
+
+  if [ -f "$P6_CONFIG_FILE" ]; then
+    grep -v "^${var_name}=" "$P6_CONFIG_FILE" > "$temp_file" || true
+  fi
+
+  echo "${var_name}=\"${value}\"" >> "$temp_file"
+  mv "$temp_file" "$P6_CONFIG_FILE"
+
+  echo "Set $key = $value"
+}
+
 p6_cmd_list() {
   local login="$1"
   shift 1
@@ -357,9 +501,6 @@ p6_github_clone_parallel() {
         echo "failed:$repo:clone" >> "$P6_RESULTS_FILE"
       fi
       (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
-    else
-      mkdir -p "$dest_dir"
-      (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1)
     fi
   done
 }
@@ -421,4 +562,3 @@ p6_print_summary() {
 #>
 ######################################################################
 p6main "$@"
-
