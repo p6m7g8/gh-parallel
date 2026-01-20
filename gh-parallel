@@ -34,9 +34,21 @@ p6_usage() {
   cat <<EOF
 Usage:
   gh parallel -h
-  gh parallel clone <login> <dest_dir> [-- <clone-options>]
+  gh parallel clone <login> <dest_dir> [options]
+
+Commands:
+  clone   Clone all repositories for a user or organization
 
 Options:
+  -h              Show this help message
+
+Clone Options:
+  --language <lang>   Only clone repos with the specified language
+  --topic <topic>     Only clone repos with the specified topic
+  --visibility <vis>  Only clone repos with visibility (public|private)
+  --archived          Only clone archived repositories
+  --source            Only clone non-fork repositories
+  --fork              Only clone forked repositories
 EOF
   exit "$rc"
 }
@@ -99,8 +111,42 @@ p6main() {
 ######################################################################
 p6_cmd_list() {
   local login="$1"
+  shift 1
 
-  gh repo list "$login" -L 5000 | awk '{print $1}' | sort
+  local gh_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --language)
+      gh_args+=("--language" "$2")
+      shift 2
+      ;;
+    --topic)
+      gh_args+=("--topic" "$2")
+      shift 2
+      ;;
+    --visibility)
+      gh_args+=("--visibility" "$2")
+      shift 2
+      ;;
+    --archived)
+      gh_args+=("--archived")
+      shift
+      ;;
+    --source)
+      gh_args+=("--source")
+      shift
+      ;;
+    --fork)
+      gh_args+=("--fork")
+      shift
+      ;;
+    *)
+      break
+      ;;
+    esac
+  done
+
+  gh repo list "$login" -L 5000 "${gh_args[@]}" | awk '{print $1}' | sort
 }
 
 ######################################################################
@@ -117,16 +163,18 @@ p6_cmd_list() {
 p6_cmd_clone() {
   local login="$1"
   local dir="$2"
+  shift 2
 
-  if [ $# -ne 2 ]; then
-    p6_usage 1 "invalid arguments"
+  if [ -z "$login" ] || [ -z "$dir" ]; then
+    p6_usage 1 "clone requires <login> and <dest_dir>"
   fi
 
+  # Pass remaining args (filters) to list
   local combos
-  combos=$(p6_cmd_list "$login")
+  combos=$(p6_cmd_list "$login" "$@")
 
   if [ -z "$combos" ]; then
-    p6_usage 1 "invalid organization/user"
+    p6_usage 1 "no repositories found (check login or filters)"
   fi
 
   if [ ! -d "$dir" ]; then
