@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
 # shellcheck shell=bash
+set -o pipefail
+
+# Temp file for tracking results across parallel processes
+P6_RESULTS_FILE=""
 
 # Configuration
 P6_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gh-parallel"
@@ -66,7 +70,17 @@ Examples:
   gh parallel config jobs               # Show jobs setting
   gh parallel config jobs 8             # Set jobs to 8
   gh parallel config visibility public  # Only clone public repos by default
+  gh parallel [-j <jobs>] [--dry-run] clone <login> <dest_dir>
+
+Commands:
+  clone   Clone all repositories for a user or organization
+
+Global Options:
+  -h              Show this help message
+  -j, --jobs <n>  Number of parallel jobs (default: 3)
+  --dry-run       Show what would be done without executing
 EOF
+
   exit "$rc"
 }
 
@@ -80,31 +94,54 @@ EOF
 #
 #>
 ######################################################################
-p6main() {
-  shift 0
+P6_PARALLEL_JOBS=3
+P6_DRY_RUN=false
 
+p6main() {
   # sanitize env
   LC_ALL=C
 
-  # parse options
-  local flag
-  while getopts "h" flag; do
-    case $flag in
-    h) p6_usage 0 "help" ;;
-    *) p6_usage 1 "invalid flag" ;;
+  # parse global options
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -h | --help)
+      p6_usage 0 "help"
+      ;;
+    -j | --jobs)
+      P6_PARALLEL_JOBS="$2"
+      if ! [[ "$P6_PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [ "$P6_PARALLEL_JOBS" -lt 1 ]; then
+        p6_usage 1 "invalid jobs value: $P6_PARALLEL_JOBS"
+      fi
+      shift 2
+      ;;
+    --dry-run)
+      P6_DRY_RUN=true
+      shift
+      ;;
+    -*)
+      p6_usage 1 "unknown option: $1"
+      ;;
+    *)
+      break
+      ;;
     esac
   done
-  shift $((OPTIND - 1))
 
   # grab command
-  local cmd="$1"
+  local cmd="${1:-}"
+  if [ -z "$cmd" ]; then
+    p6_usage 1 "command required"
+  fi
   shift 1
 
   # security 101: only allow valid commands
   case $cmd in
   help) p6_usage ;;
+  list) ;;
   clone) ;;
   config) ;;
+  status) ;;
+  sync) ;;
   *) p6_usage 1 "invalid cmd" ;;
   esac
 
@@ -240,8 +277,42 @@ p6_cmd_config() {
 
 p6_cmd_list() {
   local login="$1"
+  shift 1
 
-  gh repo list "$login" -L 5000 | awk '{print $1}' | sort
+  local gh_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --language)
+      gh_args+=("--language" "$2")
+      shift 2
+      ;;
+    --topic)
+      gh_args+=("--topic" "$2")
+      shift 2
+      ;;
+    --visibility)
+      gh_args+=("--visibility" "$2")
+      shift 2
+      ;;
+    --archived)
+      gh_args+=("--archived")
+      shift
+      ;;
+    --source)
+      gh_args+=("--source")
+      shift
+      ;;
+    --fork)
+      gh_args+=("--fork")
+      shift
+      ;;
+    *)
+      break
+      ;;
+    esac
+  done
+
+  gh repo list "$login" -L 5000 "${gh_args[@]}" | awk '{print $1}' | sort
 }
 
 ######################################################################
@@ -258,16 +329,18 @@ p6_cmd_list() {
 p6_cmd_clone() {
   local login="$1"
   local dir="$2"
+  shift 2
 
-  if [ $# -ne 2 ]; then
-    p6_usage 1 "invalid arguments"
+  if [ -z "$login" ] || [ -z "$dir" ]; then
+    p6_usage 1 "clone requires <login> and <dest_dir>"
   fi
 
+  # Pass remaining args (filters) to list
   local combos
-  combos=$(p6_cmd_list "$login")
+  combos=$(p6_cmd_list "$login" "$@")
 
   if [ -z "$combos" ]; then
-    p6_usage 1 "invalid organization/user"
+    p6_usage 1 "no repositories found (check login or filters)"
   fi
 
   if [ ! -d "$dir" ]; then
@@ -278,8 +351,119 @@ p6_cmd_clone() {
   local login_dir
   login_dir="$dir/$login"
 
+  # Create temp file for results
+  P6_RESULTS_FILE=$(mktemp)
+  export P6_RESULTS_FILE
+
   # shellcheck disable=SC2086
   parallel --bar --jobs 3 -m p6_github_clone_parallel "$login_dir" ::: $combos
+
+  p6_print_summary
+  local repo_count
+  repo_count=$(echo "$combos" | wc -l | tr -d ' ')
+  echo "Found $repo_count repositories"
+
+  if [ "$P6_DRY_RUN" = true ]; then
+    echo "[dry-run] Would clone $repo_count repositories with $P6_PARALLEL_JOBS parallel jobs:"
+    echo "$combos"
+    return 0
+  fi
+
+  # shellcheck disable=SC2086
+  parallel --bar --jobs "$P6_PARALLEL_JOBS" -m p6_github_clone_parallel "$login_dir" ::: $combos
+}
+
+######################################################################
+#<
+#
+# Function: p6_cmd_status(dir)
+#
+#  Args:
+#	  dir -
+#
+#>
+######################################################################
+p6_cmd_status() {
+  local dir="$1"
+
+  if [ $# -ne 1 ]; then
+    p6_usage 1 "status requires exactly one argument: <dest_dir>"
+  fi
+
+  if [ ! -d "$dir" ]; then
+    echo >&2 "error: directory does not exist: $dir"
+    exit 1
+  fi
+
+  local repos
+  repos=$(find "$dir" -mindepth 2 -maxdepth 2 -type d -name ".git" -exec dirname {} \; | sort)
+
+  if [ -z "$repos" ]; then
+    echo >&2 "error: no git repositories found in $dir"
+    exit 1
+  fi
+
+  local clean=0
+  local dirty=0
+  local behind=0
+  local ahead=0
+  local total=0
+
+  echo "Checking repository status..."
+  echo ""
+
+  local repo_dir
+  for repo_dir in $repos; do
+    total=$((total + 1))
+    local repo_name
+    repo_name=$(basename "$repo_dir")
+    local status_line=""
+
+    # Check for uncommitted changes
+    if ! (cd "$repo_dir" && git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null); then
+      dirty=$((dirty + 1))
+      status_line="[dirty]  $repo_name"
+    else
+      # Check if behind/ahead of remote
+      local upstream
+      upstream=$(cd "$repo_dir" && git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null) || true
+      if [ -n "$upstream" ]; then
+        local counts
+        counts=$(cd "$repo_dir" && git rev-list --left-right --count HEAD..."$upstream" 2>/dev/null) || true
+        if [ -n "$counts" ]; then
+          local ahead_count behind_count
+          ahead_count=$(echo "$counts" | awk '{print $1}')
+          behind_count=$(echo "$counts" | awk '{print $2}')
+          if [ "$behind_count" -gt 0 ]; then
+            behind=$((behind + 1))
+            status_line="[behind] $repo_name ($behind_count commits)"
+          elif [ "$ahead_count" -gt 0 ]; then
+            ahead=$((ahead + 1))
+            status_line="[ahead]  $repo_name ($ahead_count commits)"
+          else
+            clean=$((clean + 1))
+            status_line="[clean]  $repo_name"
+          fi
+        else
+          clean=$((clean + 1))
+          status_line="[clean]  $repo_name"
+        fi
+      else
+        clean=$((clean + 1))
+        status_line="[clean]  $repo_name (no upstream)"
+      fi
+    fi
+
+    echo "$status_line"
+  done
+
+  echo ""
+  echo "Summary:"
+  echo "  Total:  $total"
+  echo "  Clean:  $clean"
+  echo "  Dirty:  $dirty"
+  echo "  Behind: $behind"
+  echo "  Ahead:  $ahead"
 }
 
 ######################################################################
@@ -300,22 +484,75 @@ p6_github_clone_parallel() {
   local combo
   for combo in "$@"; do
     local repo
-    repo=$(echo "$combo" | cut -d / -f 2)
+    repo="${combo##*/}"
     local dest_dir="$login_dir/$repo"
 
     if [ -d "$dest_dir" ]; then
-      local cmd
-      cmd="(cd \"$dest_dir\" && gh repo sync >/dev/null 2>&1)"
-      eval "$cmd"
+      if (cd "$dest_dir" && gh repo sync >/dev/null 2>&1); then
+        echo "synced:$repo" >> "$P6_RESULTS_FILE"
+      else
+        echo "failed:$repo:sync" >> "$P6_RESULTS_FILE"
+      fi
     else
       mkdir -p "$dest_dir"
-      local cmd
-      cmd="(cd \"$login_dir\" && gh repo clone \"$combo\" >/dev/null 2>&1)"
-      eval "$cmd"
+      if (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1); then
+        echo "cloned:$repo" >> "$P6_RESULTS_FILE"
+      else
+        echo "failed:$repo:clone" >> "$P6_RESULTS_FILE"
+      fi
+      (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
+    else
+      mkdir -p "$dest_dir"
+      (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1)
     fi
   done
 }
 export -f p6_github_clone_parallel
+
+######################################################################
+#<
+#
+# Function: p6_print_summary()
+#
+#>
+######################################################################
+p6_print_summary() {
+  if [ ! -f "$P6_RESULTS_FILE" ]; then
+    echo "No results to report"
+    return
+  fi
+
+  local cloned=0 synced=0 failed=0
+  local failed_repos=""
+
+  while IFS=: read -r status repo reason; do
+    case "$status" in
+    cloned) cloned=$((cloned + 1)) ;;
+    synced) synced=$((synced + 1)) ;;
+    failed)
+      failed=$((failed + 1))
+      failed_repos="${failed_repos}  - ${repo} (${reason})\n"
+      ;;
+    esac
+  done < "$P6_RESULTS_FILE"
+
+  echo ""
+  echo "========================================="
+  echo "Summary"
+  echo "========================================="
+  echo "  Cloned: $cloned"
+  echo "  Synced: $synced"
+  echo "  Failed: $failed"
+  echo "  Total:  $((cloned + synced + failed))"
+
+  if [ -n "$failed_repos" ]; then
+    echo ""
+    echo "Failed repositories:"
+    echo -e "$failed_repos"
+  fi
+
+  rm -f "$P6_RESULTS_FILE"
+}
 
 ######################################################################
 #<
