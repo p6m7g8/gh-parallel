@@ -34,9 +34,20 @@ p6_usage() {
   cat <<EOF
 Usage:
   gh parallel -h
+  gh parallel list <login> [--archived | --source | --fork]
   gh parallel clone <login> <dest_dir> [-- <clone-options>]
 
+Commands:
+  list    List all repositories for a user or organization
+  clone   Clone all repositories for a user or organization
+
 Options:
+  -h      Show this help message
+
+List Options:
+  --archived   Only list archived repositories
+  --source     Only list non-fork repositories
+  --fork       Only list forked repositories
 EOF
   exit "$rc"
 }
@@ -71,9 +82,10 @@ p6main() {
   local cmd="$1"
   shift 1
 
-  # security 101: only allow valid comamnds
+  # security 101: only allow valid commands
   case $cmd in
   help) p6_usage ;;
+  list) ;;
   clone) ;;
   *) p6_usage 1 "invalid cmd" ;;
   esac
@@ -99,8 +111,30 @@ p6main() {
 ######################################################################
 p6_cmd_list() {
   local login="$1"
+  shift 1
 
-  gh repo list "$login" -L 5000 | awk '{print $1}' | sort
+  local gh_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --archived)
+      gh_args+=("--archived")
+      shift
+      ;;
+    --source)
+      gh_args+=("--source")
+      shift
+      ;;
+    --fork)
+      gh_args+=("--fork")
+      shift
+      ;;
+    *)
+      p6_usage 1 "unknown list option: $1"
+      ;;
+    esac
+  done
+
+  gh repo list "$login" -L 5000 "${gh_args[@]}" | awk '{print $1}' | sort
 }
 
 ######################################################################
