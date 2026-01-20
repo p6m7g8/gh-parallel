@@ -3,6 +3,9 @@
 # shellcheck shell=bash
 set -o pipefail
 
+# Temp file for tracking results across parallel processes
+P6_RESULTS_FILE=""
+
 ################################################################################
 #
 # Uses GNU parallel to parallelize many github operations.
@@ -204,6 +207,14 @@ p6_cmd_clone() {
   local login_dir
   login_dir="$dir/$login"
 
+  # Create temp file for results
+  P6_RESULTS_FILE=$(mktemp)
+  export P6_RESULTS_FILE
+
+  # shellcheck disable=SC2086
+  parallel --bar --jobs 3 -m p6_github_clone_parallel "$login_dir" ::: $combos
+
+  p6_print_summary
   local repo_count
   repo_count=$(echo "$combos" | wc -l | tr -d ' ')
   echo "Found $repo_count repositories"
@@ -333,6 +344,18 @@ p6_github_clone_parallel() {
     local dest_dir="$login_dir/$repo"
 
     if [ -d "$dest_dir" ]; then
+      if (cd "$dest_dir" && gh repo sync >/dev/null 2>&1); then
+        echo "synced:$repo" >> "$P6_RESULTS_FILE"
+      else
+        echo "failed:$repo:sync" >> "$P6_RESULTS_FILE"
+      fi
+    else
+      mkdir -p "$dest_dir"
+      if (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1); then
+        echo "cloned:$repo" >> "$P6_RESULTS_FILE"
+      else
+        echo "failed:$repo:clone" >> "$P6_RESULTS_FILE"
+      fi
       (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
     else
       mkdir -p "$dest_dir"
@@ -341,6 +364,51 @@ p6_github_clone_parallel() {
   done
 }
 export -f p6_github_clone_parallel
+
+######################################################################
+#<
+#
+# Function: p6_print_summary()
+#
+#>
+######################################################################
+p6_print_summary() {
+  if [ ! -f "$P6_RESULTS_FILE" ]; then
+    echo "No results to report"
+    return
+  fi
+
+  local cloned=0 synced=0 failed=0
+  local failed_repos=""
+
+  while IFS=: read -r status repo reason; do
+    case "$status" in
+    cloned) cloned=$((cloned + 1)) ;;
+    synced) synced=$((synced + 1)) ;;
+    failed)
+      failed=$((failed + 1))
+      failed_repos="${failed_repos}  - ${repo} (${reason})\n"
+      ;;
+    esac
+  done < "$P6_RESULTS_FILE"
+
+  echo ""
+  echo "========================================="
+  echo "Summary"
+  echo "========================================="
+  echo "  Cloned: $cloned"
+  echo "  Synced: $synced"
+  echo "  Failed: $failed"
+  echo "  Total:  $((cloned + synced + failed))"
+
+  if [ -n "$failed_repos" ]; then
+    echo ""
+    echo "Failed repositories:"
+    echo -e "$failed_repos"
+  fi
+
+  rm -f "$P6_RESULTS_FILE"
+}
 
 ######################################################################
 #<
