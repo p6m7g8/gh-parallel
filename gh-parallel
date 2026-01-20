@@ -35,8 +35,14 @@ p6_usage() {
 Usage:
   gh parallel -h
   gh parallel clone <login> <dest_dir> [-- <clone-options>]
+  gh parallel sync <dest_dir>
+
+Commands:
+  clone   Clone all repositories for a user or organization
+  sync    Sync all repositories in a directory
 
 Options:
+  -h      Show this help message
 EOF
   exit "$rc"
 }
@@ -71,10 +77,11 @@ p6main() {
   local cmd="$1"
   shift 1
 
-  # security 101: only allow valid comamnds
+  # security 101: only allow valid commands
   case $cmd in
   help) p6_usage ;;
   clone) ;;
+  sync) ;;
   *) p6_usage 1 "invalid cmd" ;;
   esac
 
@@ -140,6 +147,61 @@ p6_cmd_clone() {
   # shellcheck disable=SC2086
   parallel --bar --jobs 3 -m p6_github_clone_parallel "$login_dir" ::: $combos
 }
+
+######################################################################
+#<
+#
+# Function: p6_cmd_sync(dir)
+#
+#  Args:
+#	  dir -
+#
+#>
+######################################################################
+p6_cmd_sync() {
+  local dir="$1"
+
+  if [ $# -ne 1 ]; then
+    p6_usage 1 "sync requires exactly one argument: <dest_dir>"
+  fi
+
+  if [ ! -d "$dir" ]; then
+    echo >&2 "error: directory does not exist: $dir"
+    exit 1
+  fi
+
+  local repos
+  repos=$(find "$dir" -mindepth 2 -maxdepth 2 -type d -name ".git" -exec dirname {} \; | sort)
+
+  if [ -z "$repos" ]; then
+    echo >&2 "error: no git repositories found in $dir"
+    exit 1
+  fi
+
+  echo "Syncing repositories in $dir..."
+  # shellcheck disable=SC2086
+  parallel --bar --jobs 3 -m p6_github_sync_parallel ::: $repos
+}
+
+######################################################################
+#<
+#
+# Function: p6_github_sync_parallel(...)
+#
+#  Args:
+#	  ... -
+#
+#>
+######################################################################
+p6_github_sync_parallel() {
+  local repo_dir
+  for repo_dir in "$@"; do
+    if [ -d "$repo_dir/.git" ]; then
+      (cd "$repo_dir" && gh repo sync >/dev/null 2>&1) || true
+    fi
+  done
+}
+export -f p6_github_sync_parallel
 
 ######################################################################
 #<
