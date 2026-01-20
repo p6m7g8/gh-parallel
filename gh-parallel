@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # shellcheck shell=bash
+set -o pipefail
 
 ################################################################################
 #
@@ -51,11 +52,32 @@ EOF
 #
 #>
 ######################################################################
-p6main() {
-  shift 0
+p6_check_dependencies() {
+  if ! command -v parallel >/dev/null 2>&1; then
+    echo >&2 "error: GNU parallel is required but not installed"
+    echo >&2 "Install with: brew install parallel (macOS) or apt install parallel (Linux)"
+    exit 1
+  fi
 
+  if ! command -v gh >/dev/null 2>&1; then
+    echo >&2 "error: GitHub CLI (gh) is required but not installed"
+    echo >&2 "Install from: https://cli.github.com/"
+    exit 1
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    echo >&2 "error: GitHub CLI is not authenticated"
+    echo >&2 "Run: gh auth login"
+    exit 1
+  fi
+}
+
+p6main() {
   # sanitize env
   LC_ALL=C
+
+  # check required dependencies
+  p6_check_dependencies
 
   # parse options
   local flag
