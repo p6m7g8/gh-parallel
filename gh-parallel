@@ -35,20 +35,15 @@ p6_usage() {
   cat <<EOF
 Usage:
   gh parallel -h
-  gh parallel list <login> [--archived | --source | --fork]
-  gh parallel clone <login> <dest_dir> [-- <clone-options>]
-  gh parallel status <dest_dir>
+  gh parallel [-j <jobs>] [--dry-run] clone <login> <dest_dir>
 
 Commands:
   clone   Clone all repositories for a user or organization
-  status  Show status of all repositories in a directory
 
-Commands:
-  list    List all repositories for a user or organization
-  clone   Clone all repositories for a user or organization
-
-Options:
-  -h      Show this help message
+Global Options:
+  -h              Show this help message
+  -j, --jobs <n>  Number of parallel jobs (default: 3)
+  --dry-run       Show what would be done without executing
 EOF
 
   exit "$rc"
@@ -64,45 +59,44 @@ EOF
 #
 #>
 ######################################################################
-p6_check_dependencies() {
-  if ! command -v parallel >/dev/null 2>&1; then
-    echo >&2 "error: GNU parallel is required but not installed"
-    echo >&2 "Install with: brew install parallel (macOS) or apt install parallel (Linux)"
-    exit 1
-  fi
-
-  if ! command -v gh >/dev/null 2>&1; then
-    echo >&2 "error: GitHub CLI (gh) is required but not installed"
-    echo >&2 "Install from: https://cli.github.com/"
-    exit 1
-  fi
-
-  if ! gh auth status >/dev/null 2>&1; then
-    echo >&2 "error: GitHub CLI is not authenticated"
-    echo >&2 "Run: gh auth login"
-    exit 1
-  fi
-}
+P6_PARALLEL_JOBS=3
+P6_DRY_RUN=false
 
 p6main() {
   # sanitize env
   LC_ALL=C
 
-  # check required dependencies
-  p6_check_dependencies
-
-  # parse options
-  local flag
-  while getopts "h" flag; do
-    case $flag in
-    h) p6_usage 0 "help" ;;
-    *) p6_usage 1 "invalid flag" ;;
+  # parse global options
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -h | --help)
+      p6_usage 0 "help"
+      ;;
+    -j | --jobs)
+      P6_PARALLEL_JOBS="$2"
+      if ! [[ "$P6_PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [ "$P6_PARALLEL_JOBS" -lt 1 ]; then
+        p6_usage 1 "invalid jobs value: $P6_PARALLEL_JOBS"
+      fi
+      shift 2
+      ;;
+    --dry-run)
+      P6_DRY_RUN=true
+      shift
+      ;;
+    -*)
+      p6_usage 1 "unknown option: $1"
+      ;;
+    *)
+      break
+      ;;
     esac
   done
-  shift $((OPTIND - 1))
 
   # grab command
-  local cmd="$1"
+  local cmd="${1:-}"
+  if [ -z "$cmd" ]; then
+    p6_usage 1 "command required"
+  fi
   shift 1
 
   # security 101: only allow valid commands
@@ -210,8 +204,18 @@ p6_cmd_clone() {
   local login_dir
   login_dir="$dir/$login"
 
+  local repo_count
+  repo_count=$(echo "$combos" | wc -l | tr -d ' ')
+  echo "Found $repo_count repositories"
+
+  if [ "$P6_DRY_RUN" = true ]; then
+    echo "[dry-run] Would clone $repo_count repositories with $P6_PARALLEL_JOBS parallel jobs:"
+    echo "$combos"
+    return 0
+  fi
+
   # shellcheck disable=SC2086
-  parallel --bar --jobs 3 -m p6_github_clone_parallel "$login_dir" ::: $combos
+  parallel --bar --jobs "$P6_PARALLEL_JOBS" -m p6_github_clone_parallel "$login_dir" ::: $combos
 }
 
 ######################################################################
