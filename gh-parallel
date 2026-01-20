@@ -501,9 +501,6 @@ p6_github_clone_parallel() {
         echo "failed:$repo:clone" >> "$P6_RESULTS_FILE"
       fi
       (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
-    else
-      mkdir -p "$dest_dir"
-      (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1)
     fi
   done
 }
@@ -565,4 +562,3 @@ p6_print_summary() {
 #>
 ######################################################################
 p6main "$@"
-
