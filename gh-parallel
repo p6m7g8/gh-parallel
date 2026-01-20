@@ -18,6 +18,10 @@ P6_DEFAULT_VISIBILITY=""
 # shellcheck disable=SC2034
 P6_DEFAULT_SOURCE=""
 
+# Runtime options
+P6_PARALLEL_JOBS=3
+P6_DRY_RUN=false
+
 ################################################################################
 #
 # Uses GNU parallel to parallelize many github operations.
@@ -50,15 +54,27 @@ p6_usage() {
   cat <<EOF
 Usage:
   gh parallel -h
-  gh parallel clone <login> <dest_dir> [-- <clone-options>]
-  gh parallel config [<key> [<value>]]
+  gh parallel [-j <jobs>] [--dry-run] <command> [options]
 
 Commands:
-  clone   Clone all repositories for a user or organization
-  config  Get or set configuration options
+  list <login> [filters]              List repositories for a user/organization
+  clone <login> <dest_dir> [filters]  Clone repositories for a user/organization
+  sync <dest_dir>                     Sync all repositories in a directory
+  status <dest_dir>                   Show status of repositories in a directory
+  config [<key> [<value>]]            Get or set configuration options
 
-Options:
-  -h      Show this help message
+Global Options:
+  -h, --help      Show this help message
+  -j, --jobs <n>  Number of parallel jobs (default: 3)
+  --dry-run       Show what would be done without executing
+
+Filter Options (for list/clone):
+  --language <lang>   Only repos with the specified language
+  --topic <topic>     Only repos with the specified topic
+  --visibility <vis>  Only repos with visibility (public|private)
+  --archived          Only archived repositories
+  --source            Only non-fork repositories
+  --fork              Only forked repositories
 
 Config Keys:
   jobs        Number of parallel jobs (default: 3)
@@ -66,22 +82,57 @@ Config Keys:
   source      Default to source repos only (true|false)
 
 Examples:
-  gh parallel config                    # Show all settings
-  gh parallel config jobs               # Show jobs setting
-  gh parallel config jobs 8             # Set jobs to 8
-  gh parallel config visibility public  # Only clone public repos by default
-  gh parallel [-j <jobs>] [--dry-run] clone <login> <dest_dir>
-
-Commands:
-  clone   Clone all repositories for a user or organization
-
-Global Options:
-  -h              Show this help message
-  -j, --jobs <n>  Number of parallel jobs (default: 3)
-  --dry-run       Show what would be done without executing
+  gh parallel list myorg --source
+  gh parallel clone myorg ./repos --language python
+  gh parallel -j 8 clone myorg ./repos
+  gh parallel --dry-run clone myorg ./repos
+  gh parallel sync ./repos
+  gh parallel status ./repos
+  gh parallel config jobs 8
 EOF
 
   exit "$rc"
+}
+
+######################################################################
+#<
+#
+# Function: p6_check_dependencies()
+#
+#>
+######################################################################
+p6_check_dependencies() {
+  if ! command -v parallel >/dev/null 2>&1; then
+    echo >&2 "error: GNU parallel is required but not installed"
+    echo >&2 "Install with: brew install parallel (macOS) or apt install parallel (Linux)"
+    exit 1
+  fi
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo >&2 "error: GitHub CLI (gh) is required but not installed"
+    echo >&2 "Install from: https://cli.github.com/"
+    exit 1
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    echo >&2 "error: GitHub CLI is not authenticated"
+    echo >&2 "Run: gh auth login"
+    exit 1
+  fi
+}
+
+######################################################################
+#<
+#
+# Function: p6_load_config()
+#
+#>
+######################################################################
+p6_load_config() {
+  if [ -f "$P6_CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$P6_CONFIG_FILE"
+  fi
 }
 
 ######################################################################
@@ -94,18 +145,24 @@ EOF
 #
 #>
 ######################################################################
-P6_PARALLEL_JOBS=3
-P6_DRY_RUN=false
-
 p6main() {
   # sanitize env
   LC_ALL=C
+
+  # check required dependencies
+  p6_check_dependencies
+
+  # load config defaults
+  p6_load_config
+  if [ -n "$P6_DEFAULT_JOBS" ]; then
+    P6_PARALLEL_JOBS="$P6_DEFAULT_JOBS"
+  fi
 
   # parse global options
   while [[ $# -gt 0 ]]; do
     case "$1" in
     -h | --help)
-      p6_usage 0 "help"
+      p6_usage 0
       ;;
     -j | --jobs)
       P6_PARALLEL_JOBS="$2"
@@ -139,10 +196,10 @@ p6main() {
   help) p6_usage ;;
   list) ;;
   clone) ;;
-  config) ;;
-  status) ;;
   sync) ;;
-  *) p6_usage 1 "invalid cmd" ;;
+  status) ;;
+  config) ;;
+  *) p6_usage 1 "invalid cmd: $cmd" ;;
   esac
 
   # exit if any cli errors w/ >0 return code
@@ -152,30 +209,6 @@ p6main() {
   set +e
 
   return 0
-}
-
-######################################################################
-#<
-#
-# Function: p6_cmd_list(login)
-#
-#  Args:
-#	  login -
-#
-#>
-######################################################################
-######################################################################
-#<
-#
-# Function: p6_load_config()
-#
-#>
-######################################################################
-p6_load_config() {
-  if [ -f "$P6_CONFIG_FILE" ]; then
-    # shellcheck source=/dev/null
-    source "$P6_CONFIG_FILE"
-  fi
 }
 
 ######################################################################
@@ -275,6 +308,17 @@ p6_cmd_config() {
   echo "Set $key = $value"
 }
 
+######################################################################
+#<
+#
+# Function: p6_cmd_list(login, ...)
+#
+#  Args:
+#	  login -
+#	  ... - filter options
+#
+#>
+######################################################################
 p6_cmd_list() {
   local login="$1"
   shift 1
@@ -307,7 +351,7 @@ p6_cmd_list() {
       shift
       ;;
     *)
-      break
+      p6_usage 1 "unknown list option: $1"
       ;;
     esac
   done
@@ -318,18 +362,19 @@ p6_cmd_list() {
 ######################################################################
 #<
 #
-# Function: p6_cmd_clone(login, dir)
+# Function: p6_cmd_clone(login, dir, ...)
 #
 #  Args:
 #	  login -
 #	  dir -
+#	  ... - filter options
 #
 #>
 ######################################################################
 p6_cmd_clone() {
   local login="$1"
   local dir="$2"
-  shift 2
+  shift 2 || true
 
   if [ -z "$login" ] || [ -z "$dir" ]; then
     p6_usage 1 "clone requires <login> and <dest_dir>"
@@ -341,6 +386,16 @@ p6_cmd_clone() {
 
   if [ -z "$combos" ]; then
     p6_usage 1 "no repositories found (check login or filters)"
+  fi
+
+  local repo_count
+  repo_count=$(echo "$combos" | wc -l | tr -d ' ')
+  echo "Found $repo_count repositories"
+
+  if [ "$P6_DRY_RUN" = true ]; then
+    echo "[dry-run] Would clone $repo_count repositories with $P6_PARALLEL_JOBS parallel jobs:"
+    echo "$combos"
+    return 0
   fi
 
   if [ ! -d "$dir" ]; then
@@ -356,21 +411,60 @@ p6_cmd_clone() {
   export P6_RESULTS_FILE
 
   # shellcheck disable=SC2086
-  parallel --bar --jobs 3 -m p6_github_clone_parallel "$login_dir" ::: $combos
+  parallel --bar --jobs "$P6_PARALLEL_JOBS" -m p6_github_clone_parallel "$login_dir" ::: $combos
 
   p6_print_summary
+}
+
+######################################################################
+#<
+#
+# Function: p6_cmd_sync(dir)
+#
+#  Args:
+#	  dir -
+#
+#>
+######################################################################
+p6_cmd_sync() {
+  local dir="$1"
+
+  if [ $# -ne 1 ]; then
+    p6_usage 1 "sync requires exactly one argument: <dest_dir>"
+  fi
+
+  if [ ! -d "$dir" ]; then
+    echo >&2 "error: directory does not exist: $dir"
+    exit 1
+  fi
+
+  local repos
+  repos=$(find "$dir" -mindepth 2 -maxdepth 2 -type d -name ".git" -exec dirname {} \; | sort)
+
+  if [ -z "$repos" ]; then
+    echo >&2 "error: no git repositories found in $dir"
+    exit 1
+  fi
+
   local repo_count
-  repo_count=$(echo "$combos" | wc -l | tr -d ' ')
-  echo "Found $repo_count repositories"
+  repo_count=$(echo "$repos" | wc -l | tr -d ' ')
+  echo "Found $repo_count repositories to sync"
 
   if [ "$P6_DRY_RUN" = true ]; then
-    echo "[dry-run] Would clone $repo_count repositories with $P6_PARALLEL_JOBS parallel jobs:"
-    echo "$combos"
+    echo "[dry-run] Would sync $repo_count repositories with $P6_PARALLEL_JOBS parallel jobs:"
+    echo "$repos"
     return 0
   fi
 
+  # Create temp file for results
+  P6_RESULTS_FILE=$(mktemp)
+  export P6_RESULTS_FILE
+
+  echo "Syncing repositories in $dir..."
   # shellcheck disable=SC2086
-  parallel --bar --jobs "$P6_PARALLEL_JOBS" -m p6_github_clone_parallel "$login_dir" ::: $combos
+  parallel --bar --jobs "$P6_PARALLEL_JOBS" -m p6_github_sync_parallel ::: $repos
+
+  p6_print_summary
 }
 
 ######################################################################
@@ -500,11 +594,36 @@ p6_github_clone_parallel() {
       else
         echo "failed:$repo:clone" >> "$P6_RESULTS_FILE"
       fi
-      (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
     fi
   done
 }
 export -f p6_github_clone_parallel
+
+######################################################################
+#<
+#
+# Function: p6_github_sync_parallel(...)
+#
+#  Args:
+#	  ... -
+#
+#>
+######################################################################
+p6_github_sync_parallel() {
+  local repo_dir
+  for repo_dir in "$@"; do
+    if [ -d "$repo_dir/.git" ]; then
+      local repo_name
+      repo_name=$(basename "$repo_dir")
+      if (cd "$repo_dir" && gh repo sync >/dev/null 2>&1); then
+        echo "synced:$repo_name" >> "$P6_RESULTS_FILE"
+      else
+        echo "failed:$repo_name:sync" >> "$P6_RESULTS_FILE"
+      fi
+    fi
+  done
+}
+export -f p6_github_sync_parallel
 
 ######################################################################
 #<
@@ -552,13 +671,6 @@ p6_print_summary() {
 }
 
 ######################################################################
-#<
-#
-# Function: p6main(...)
-#
-#  Args:
-#	  ... -
-#
-#>
+# Main entry point
 ######################################################################
 p6main "$@"
