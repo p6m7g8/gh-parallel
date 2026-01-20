@@ -159,18 +159,14 @@ p6_github_clone_parallel() {
   local combo
   for combo in "$@"; do
     local repo
-    repo=$(echo "$combo" | cut -d / -f 2)
+    repo="${combo##*/}"
     local dest_dir="$login_dir/$repo"
 
     if [ -d "$dest_dir" ]; then
-      local cmd
-      cmd="(cd \"$dest_dir\" && gh repo sync >/dev/null 2>&1)"
-      eval "$cmd"
+      (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
     else
       mkdir -p "$dest_dir"
-      local cmd
-      cmd="(cd \"$login_dir\" && gh repo clone \"$combo\" >/dev/null 2>&1)"
-      eval "$cmd"
+      (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1)
     fi
   done
 }
