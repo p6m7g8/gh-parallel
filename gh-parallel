@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # shellcheck shell=bash
+set -o pipefail
 
 ################################################################################
 #
@@ -44,6 +45,7 @@ Global Options:
   -j, --jobs <n>  Number of parallel jobs (default: 3)
   --dry-run       Show what would be done without executing
 EOF
+
   exit "$rc"
 }
 
@@ -100,7 +102,10 @@ p6main() {
   # security 101: only allow valid commands
   case $cmd in
   help) p6_usage ;;
+  list) ;;
   clone) ;;
+  status) ;;
+  sync) ;;
   *) p6_usage 1 "invalid cmd" ;;
   esac
 
@@ -125,8 +130,42 @@ p6main() {
 ######################################################################
 p6_cmd_list() {
   local login="$1"
+  shift 1
 
-  gh repo list "$login" -L 5000 | awk '{print $1}' | sort
+  local gh_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --language)
+      gh_args+=("--language" "$2")
+      shift 2
+      ;;
+    --topic)
+      gh_args+=("--topic" "$2")
+      shift 2
+      ;;
+    --visibility)
+      gh_args+=("--visibility" "$2")
+      shift 2
+      ;;
+    --archived)
+      gh_args+=("--archived")
+      shift
+      ;;
+    --source)
+      gh_args+=("--source")
+      shift
+      ;;
+    --fork)
+      gh_args+=("--fork")
+      shift
+      ;;
+    *)
+      break
+      ;;
+    esac
+  done
+
+  gh repo list "$login" -L 5000 "${gh_args[@]}" | awk '{print $1}' | sort
 }
 
 ######################################################################
@@ -143,16 +182,18 @@ p6_cmd_list() {
 p6_cmd_clone() {
   local login="$1"
   local dir="$2"
+  shift 2
 
-  if [ $# -ne 2 ]; then
-    p6_usage 1 "invalid arguments"
+  if [ -z "$login" ] || [ -z "$dir" ]; then
+    p6_usage 1 "clone requires <login> and <dest_dir>"
   fi
 
+  # Pass remaining args (filters) to list
   local combos
-  combos=$(p6_cmd_list "$login")
+  combos=$(p6_cmd_list "$login" "$@")
 
   if [ -z "$combos" ]; then
-    p6_usage 1 "invalid organization/user"
+    p6_usage 1 "no repositories found (check login or filters)"
   fi
 
   if [ ! -d "$dir" ]; then
@@ -180,6 +221,99 @@ p6_cmd_clone() {
 ######################################################################
 #<
 #
+# Function: p6_cmd_status(dir)
+#
+#  Args:
+#	  dir -
+#
+#>
+######################################################################
+p6_cmd_status() {
+  local dir="$1"
+
+  if [ $# -ne 1 ]; then
+    p6_usage 1 "status requires exactly one argument: <dest_dir>"
+  fi
+
+  if [ ! -d "$dir" ]; then
+    echo >&2 "error: directory does not exist: $dir"
+    exit 1
+  fi
+
+  local repos
+  repos=$(find "$dir" -mindepth 2 -maxdepth 2 -type d -name ".git" -exec dirname {} \; | sort)
+
+  if [ -z "$repos" ]; then
+    echo >&2 "error: no git repositories found in $dir"
+    exit 1
+  fi
+
+  local clean=0
+  local dirty=0
+  local behind=0
+  local ahead=0
+  local total=0
+
+  echo "Checking repository status..."
+  echo ""
+
+  local repo_dir
+  for repo_dir in $repos; do
+    total=$((total + 1))
+    local repo_name
+    repo_name=$(basename "$repo_dir")
+    local status_line=""
+
+    # Check for uncommitted changes
+    if ! (cd "$repo_dir" && git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null); then
+      dirty=$((dirty + 1))
+      status_line="[dirty]  $repo_name"
+    else
+      # Check if behind/ahead of remote
+      local upstream
+      upstream=$(cd "$repo_dir" && git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null) || true
+      if [ -n "$upstream" ]; then
+        local counts
+        counts=$(cd "$repo_dir" && git rev-list --left-right --count HEAD..."$upstream" 2>/dev/null) || true
+        if [ -n "$counts" ]; then
+          local ahead_count behind_count
+          ahead_count=$(echo "$counts" | awk '{print $1}')
+          behind_count=$(echo "$counts" | awk '{print $2}')
+          if [ "$behind_count" -gt 0 ]; then
+            behind=$((behind + 1))
+            status_line="[behind] $repo_name ($behind_count commits)"
+          elif [ "$ahead_count" -gt 0 ]; then
+            ahead=$((ahead + 1))
+            status_line="[ahead]  $repo_name ($ahead_count commits)"
+          else
+            clean=$((clean + 1))
+            status_line="[clean]  $repo_name"
+          fi
+        else
+          clean=$((clean + 1))
+          status_line="[clean]  $repo_name"
+        fi
+      else
+        clean=$((clean + 1))
+        status_line="[clean]  $repo_name (no upstream)"
+      fi
+    fi
+
+    echo "$status_line"
+  done
+
+  echo ""
+  echo "Summary:"
+  echo "  Total:  $total"
+  echo "  Clean:  $clean"
+  echo "  Dirty:  $dirty"
+  echo "  Behind: $behind"
+  echo "  Ahead:  $ahead"
+}
+
+######################################################################
+#<
+#
 # Function: p6_github_clone_parallel(login_dir, ...)
 #
 #  Args:
@@ -195,18 +329,14 @@ p6_github_clone_parallel() {
   local combo
   for combo in "$@"; do
     local repo
-    repo=$(echo "$combo" | cut -d / -f 2)
+    repo="${combo##*/}"
     local dest_dir="$login_dir/$repo"
 
     if [ -d "$dest_dir" ]; then
-      local cmd
-      cmd="(cd \"$dest_dir\" && gh repo sync >/dev/null 2>&1)"
-      eval "$cmd"
+      (cd "$dest_dir" && gh repo sync >/dev/null 2>&1)
     else
       mkdir -p "$dest_dir"
-      local cmd
-      cmd="(cd \"$login_dir\" && gh repo clone \"$combo\" >/dev/null 2>&1)"
-      eval "$cmd"
+      (cd "$login_dir" && gh repo clone "$combo" >/dev/null 2>&1)
     fi
   done
 }
