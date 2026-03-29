@@ -9,6 +9,10 @@ on:
       - reopened
       - ready_for_review
       - edited
+  push:
+    branches:
+      - gh-readonly-queue/**
+  merge_group: {}
 
 jobs:
   lint:
@@ -17,7 +21,11 @@ jobs:
     permissions:
       pull-requests: read
     steps:
+      - name: Skip on queue refs
+        if: github.event_name == 'merge_group' || github.event_name == 'push'
+        run: echo "Skipping lint in queue context"
       - name: Lint PR title
+        if: github.event_name == 'pull_request_target'
         uses: p6m7g8-actions/p6-gh-pr-title-linter@main
         with:
           gh_token: ${{ secrets.GITHUB_TOKEN }}
