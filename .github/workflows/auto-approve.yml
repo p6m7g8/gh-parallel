@@ -17,6 +17,6 @@ jobs:
       pull-requests: write
     steps:
       - name: Auto-Approve PR
-        uses: p6m7g8-actions/p6-gh-pr-auto-approve@main
+        uses: p6m7g8-actions/p6-gh-pr-approve@main
         with:
           bot_token: ${{ secrets.P6_A_GH_TOKEN }}
