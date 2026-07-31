@@ -1,4 +1,4 @@
-name: PR Labeler
+name: Stale PRs
 
 on:
   workflow_dispatch: {}
@@ -14,4 +14,4 @@ jobs:
       pull-requests: write
     steps:
       - name: Mark PR
-        uses: p6m7g8-actions/p6-gh-pr-stale@main
+        uses: p6m7g8-actions/p6-gh-pr-expire@main
