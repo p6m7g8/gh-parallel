@@ -4,6 +4,13 @@ on:
   pull_request: {}
   workflow_dispatch: {}
 
+  # The merge queue needs `build` to report on the queue ref. merge_group is not
+  # dispatching org-wide, so mirror the push-on-queue-ref trigger the review
+  # workflows already use.
+  push:
+    branches:
+      - gh-readonly-queue/**
+
 jobs:
   build:
     runs-on: ubuntu-latest
