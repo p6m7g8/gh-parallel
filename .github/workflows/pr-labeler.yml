@@ -1,8 +1,11 @@
 name: PR Labeler
 
 on:
+  # No `labeled`/`unlabeled`. The labeler applies both labels in a single
+  # call now, so reacting to its own label events only self-triggers extra
+  # no-op runs.
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened]
 
 jobs:
   label:
@@ -13,6 +16,6 @@ jobs:
       pull-requests: write
     steps:
       - name: Label PR
-        uses: p6m7g8-actions/p6-gh-pr-labeler@main
+        uses: p6m7g8-actions/p6-gh-pr-label@main
         with:
           gh_token: ${{ secrets.P6_A_GH_TOKEN }}
