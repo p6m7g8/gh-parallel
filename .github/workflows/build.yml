@@ -16,6 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Build
-        uses: p6m7g8-actions/p6-build@main
+        uses: p6m7g8-actions/p6-repo-build@main
         with:
           gh_token: ${{ secrets.GITHUB_TOKEN }}
