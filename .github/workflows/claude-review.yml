@@ -1,7 +1,21 @@
 name: Claude Code Review
 on:
+  # `reopened` is load-bearing. The five upgrade actions sign their commits
+  # through create-pull-request with `sign-commits: true`, which forces
+  # GITHUB_TOKEN, and GitHub does not dispatch workflows for events raised
+  # by that token. They work around it with a step named "Fire required
+  # checks the signed PR cannot trigger itself" that runs `gh pr close`
+  # then `gh pr reopen` under the automation PAT, so `reopened` is the only
+  # event this workflow ever sees on a bot upgrade PR. Omitting it left
+  # `claude-review` -- a required check -- permanently unreported on every
+  # one of them: p6m7g8.com#250, p6-template-uv#46 and
+  # p6-template-next-tailwind-react-eslint-pnpm-ts-flatfile#137 sat BLOCKED
+  # with every other check green, through revivals on 2026-08-01 15:05 and
+  # 2026-08-02 15:06, and no error anywhere on the PR page. `ready_for_review`
+  # was the only revival event accepted before, which is why the manual
+  # unblock was a draft toggle.
   pull_request:
-    types: [opened, ready_for_review, synchronize]
+    types: [opened, ready_for_review, synchronize, reopened]
   push:
     branches:
       - gh-readonly-queue/**
